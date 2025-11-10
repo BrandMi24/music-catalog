@@ -58,25 +58,19 @@ export async function fetchAlbumTracks(collectionId: number): Promise<ITunesTrac
   return (data.results || []).filter(r => r.wrapperType === 'track') as ITunesTrack[];
 }
 
-export async function lookupAlbum(collectionId: number): Promise<{ album: ITunesAlbum; tracks: ITunesTrack[] }> {
-  // endpoint limpio; evita cache agresivo del navegador/CDN
-  const url = `${BASE}/lookup?id=${collectionId}&entity=song`;
+export async function lookupAlbum(collectionId: number) {
+  const url = import.meta.env.DEV
+    ? `https://itunes.apple.com/lookup?id=${collectionId}&entity=song` // local: directo a Apple
+    : `/api/itunes/lookup?id=${collectionId}`;                         // prod: tu función en Vercel
 
-  const res = await fetch(url, {
-    cache: 'no-store',      // evita respuestas viejas
-    credentials: 'omit',    // no mandamos cookies
-    // mode: 'cors'          // por defecto ya es 'cors' en https, lo puedes omitir
-  });
-
-  if (!res.ok) throw new Error(`iTunes ${res.status} ${res.statusText}`);
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`lookup ${res.status} ${res.statusText}`);
 
   const data = await res.json();
   const results = (data.results || []) as any[];
-
-  const album = results.find((r) => r.wrapperType === 'collection') as ITunesAlbum | undefined;
-  const tracks = results.filter((r) => r.wrapperType === 'track') as ITunesTrack[];
+  const album = results.find(r => r.wrapperType === 'collection') as ITunesAlbum;
+  const tracks = results.filter(r => r.wrapperType === 'track') as ITunesTrack[];
 
   if (!album) throw new Error('Álbum no encontrado en iTunes');
-
   return { album, tracks };
 }
