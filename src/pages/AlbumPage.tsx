@@ -14,23 +14,61 @@ export default function AlbumPage() {
   const [album, setAlbum] = useState<ITunesAlbum | null>(null)
   const [tracks, setTracks] = useState<ITunesTrack[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [reloadTick, setReloadTick] = useState(0)
 
   useEffect(() => {
-    (async () => {
-      const { album, tracks } = await lookupAlbum(albumId)
-      setAlbum(album); setTracks(tracks); setLoading(false)
+    let cancelled = false
+    ;(async () => {
+      setError(null)
+      setLoading(true)
+      try {
+        const { album, tracks } = await lookupAlbum(albumId)
+        if (cancelled) return
+        setAlbum(album)
+        setTracks(tracks)
+      } catch (e: any) {
+        if (cancelled) return
+        console.error('lookupAlbum failed', e)
+        setError(e?.message ?? 'Error al cargar el álbum')
+        setAlbum(null)
+        setTracks([])
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
     })()
-  }, [albumId])
+    return () => { cancelled = true }
+  }, [albumId, reloadTick])
 
   if (loading) return <div className="app"><div className="small">Cargando álbum…</div></div>
-  if (!album)   return <div className="app"><div className="small">Álbum no encontrado.</div></div>
+
+  if (error) {
+    return (
+      <div className="app">
+        <div className="row" style={{marginBottom:8}}>
+          <Link className="back-chip" to="/" aria-label="Volver">
+            <BackIcon style={{marginRight: 6}} /> Volver
+          </Link>
+        </div>
+        <div className="small" style={{marginBottom:12}}>{error}</div>
+        <button className="tab" onClick={() => setReloadTick(n => n + 1)}>Reintentar</button>
+      </div>
+    )
+  }
+
+  if (!album) return <div className="app"><div className="small">Álbum no encontrado.</div></div>
 
   const cover = album.artworkUrl100?.replace('100x100', '1200x1200')
   const year  = new Date(album.releaseDate).getFullYear()
 
   const queue: TrackLite[] = tracks.map(t => ({
-    id: t.trackId, title: t.trackName, artist: album.artistName,
-    previewUrl: t.previewUrl, durationMs: t.trackTimeMillis, cover, trackUrl: t.trackViewUrl,
+    id: t.trackId,
+    title: t.trackName,
+    artist: album.artistName,
+    previewUrl: t.previewUrl,
+    durationMs: t.trackTimeMillis,
+    cover,
+    trackUrl: t.trackViewUrl,
   }))
 
   return (
@@ -39,6 +77,7 @@ export default function AlbumPage() {
 
         {/* Breadcrumb / volver arriba */}
         <div className="row" style={{marginBottom:8}}>
+          {/* Si quieres parar al volver, convierte este Link en un BackLink con usePlayer y onClick={() => p.stop()} */}
           <Link className="back-chip" to="/" aria-label="Volver">
             <BackIcon style={{marginRight: 6}} /> Volver
           </Link>
@@ -126,7 +165,6 @@ function TrackRow({ i, t }: { i: number; t: TrackLite }) {
 
 function MiniPlayer() {
   const p = usePlayer()
-  
   if (!p.current || !p.isPlaying) return null
 
   const VolIcon =
@@ -135,10 +173,7 @@ function MiniPlayer() {
 
   return (
     <>
-      {/* Spacer para que el contenido no quede debajo del dock fijo */}
       <div className="mini-spacer" />
-
-      {/* Dock fijo en la parte inferior */}
       <div className="mini-dock">
         <div className="mini-container">
           <div className="mini mini--row">

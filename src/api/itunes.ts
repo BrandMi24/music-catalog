@@ -59,13 +59,34 @@ export async function fetchAlbumTracks(collectionId: number): Promise<ITunesTrac
 }
 
 export async function lookupAlbum(collectionId: number): Promise<{ album: ITunesAlbum; tracks: ITunesTrack[] }> {
-  const url = `${BASE}/lookup?id=${collectionId}&entity=song`;
-  const res = await fetch(url);
-  const data = await res.json();
-  const results = (data.results || []) as any[];
+  const url = `${BASE}/lookup?id=${collectionId}&entity=song&country=US&lang=en_us`
 
-  const album = results.find(r => r.wrapperType === 'collection') as ITunesAlbum;
-  const tracks = results.filter(r => r.wrapperType === 'track') as ITunesTrack[];
+  const fetchOnce = async (signal?: AbortSignal) => {
+    const res = await fetch(url, { signal, cache: 'no-store', mode: 'cors' })
+    if (!res.ok) throw new Error(`iTunes ${res.status} ${res.statusText}`)
+    const data = await res.json()
+    const results = (data.results || []) as any[]
+    const album = results.find(r => r.wrapperType === 'collection') as ITunesAlbum
+    const tracks = results.filter(r => r.wrapperType === 'track') as ITunesTrack[]
+    if (!album) throw new Error('Álbum no encontrado en respuesta de iTunes')
+    return { album, tracks }
+  }
 
-  return { album, tracks };
+  // Timeout de 8s + 1 reintento
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const ctl = new AbortController()
+    const t = setTimeout(() => ctl.abort(), 8000)
+    try {
+      const r = await fetchOnce(ctl.signal)
+      clearTimeout(t)
+      return r
+    } catch (err) {
+      clearTimeout(t)
+      if (attempt === 2) throw err
+      // breve espera y reintenta
+      await new Promise(r => setTimeout(r, 400))
+    }
+  }
+  // por tipos
+  throw new Error('lookupAlbum falló')
 }
