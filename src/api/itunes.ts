@@ -59,34 +59,24 @@ export async function fetchAlbumTracks(collectionId: number): Promise<ITunesTrac
 }
 
 export async function lookupAlbum(collectionId: number): Promise<{ album: ITunesAlbum; tracks: ITunesTrack[] }> {
-  const url = `${BASE}/lookup?id=${collectionId}&entity=song&country=US&lang=en_us`
+  // endpoint limpio; evita cache agresivo del navegador/CDN
+  const url = `${BASE}/lookup?id=${collectionId}&entity=song`;
 
-  const fetchOnce = async (signal?: AbortSignal) => {
-    const res = await fetch(url, { signal, cache: 'no-store', mode: 'cors' })
-    if (!res.ok) throw new Error(`iTunes ${res.status} ${res.statusText}`)
-    const data = await res.json()
-    const results = (data.results || []) as any[]
-    const album = results.find(r => r.wrapperType === 'collection') as ITunesAlbum
-    const tracks = results.filter(r => r.wrapperType === 'track') as ITunesTrack[]
-    if (!album) throw new Error('Álbum no encontrado en respuesta de iTunes')
-    return { album, tracks }
-  }
+  const res = await fetch(url, {
+    cache: 'no-store',      // evita respuestas viejas
+    credentials: 'omit',    // no mandamos cookies
+    // mode: 'cors'          // por defecto ya es 'cors' en https, lo puedes omitir
+  });
 
-  // Timeout de 8s + 1 reintento
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    const ctl = new AbortController()
-    const t = setTimeout(() => ctl.abort(), 8000)
-    try {
-      const r = await fetchOnce(ctl.signal)
-      clearTimeout(t)
-      return r
-    } catch (err) {
-      clearTimeout(t)
-      if (attempt === 2) throw err
-      // breve espera y reintenta
-      await new Promise(r => setTimeout(r, 400))
-    }
-  }
-  // por tipos
-  throw new Error('lookupAlbum falló')
+  if (!res.ok) throw new Error(`iTunes ${res.status} ${res.statusText}`);
+
+  const data = await res.json();
+  const results = (data.results || []) as any[];
+
+  const album = results.find((r) => r.wrapperType === 'collection') as ITunesAlbum | undefined;
+  const tracks = results.filter((r) => r.wrapperType === 'track') as ITunesTrack[];
+
+  if (!album) throw new Error('Álbum no encontrado en iTunes');
+
+  return { album, tracks };
 }

@@ -77,7 +77,7 @@ export default function AlbumPage() {
 
         {/* Breadcrumb / volver arriba */}
         <div className="row" style={{marginBottom:8}}>
-          {/* Si quieres parar al volver, convierte este Link en un BackLink con usePlayer y onClick={() => p.stop()} */}
+          {/* Si quieres parar al volver, conviértelo en BackLink con onClick={() => p.stop()} */}
           <Link className="back-chip" to="/" aria-label="Volver">
             <BackIcon style={{marginRight: 6}} /> Volver
           </Link>
